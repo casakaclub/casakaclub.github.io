@@ -144,6 +144,10 @@
   .marca .c { font-family: 'Montserrat', sans-serif; font-weight: 300; font-size: 14px; letter-spacing: .62em; margin-right: -.62em; margin-top: 4px; }
   .marca .mono { margin-top: 16px; letter-spacing: .12em; }
   .pie { margin: 0; padding: 0 0 36px; letter-spacing: .12em; }
+  .aviso { position: fixed; left: 50%; bottom: 24px; z-index: 20; width: min(92vw, 420px); transform: translate(-50%, 20px); opacity: 0;
+    pointer-events: none; transition: opacity .25s ease, transform .25s ease; padding: 14px 18px; border-radius: 12px;
+    background: var(--hueso); color: var(--negro); font-size: 15px; line-height: 1.4; box-shadow: 0 12px 30px rgba(0,0,0,.5); }
+  .aviso.ver { opacity: 1; transform: translate(-50%, 0); }
 </style>
 </head>
 <body>
@@ -207,6 +211,7 @@
   </footer>
   <p class="pie mono">El stock se actualiza solo desde nuestra planilla.</p>
 </div>
+<div class="aviso" id="aviso" role="status" aria-live="polite"></div>
 
 <script>
   const ORDEN_TALLES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
@@ -224,14 +229,50 @@
   function fotoAlt(id, ancho) { return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w' + ancho; }
   function nombre(it) { return it.v ? it.eq + ' ' + it.v.toLowerCase() : it.eq; }
   function epigrafe(it) { return it.v ? it.eq + ', ' + it.v.toLowerCase() : it.eq; }
+  // Dentro de la app de Instagram, ig.me se abre en el navegador interno: ahí copiamos el mensaje y abrimos el perfil en la app.
+  const EN_INSTAGRAM = /Instagram/i.test(navigator.userAgent);
+  function textoPedido(it) {
+    let texto = '¡Hola! Me interesa la camiseta ' + (it ? nombre(it) : 'del catálogo');
+    if (it && estado.talle !== 'Todos') texto += ' en talle ' + estado.talle;
+    return texto + '. ¿Sigue disponible?';
+  }
   function linkPedido(it) {
-    if (D.whatsapp) {
-      let texto = '¡Hola! Me interesa la camiseta ' + (it ? nombre(it) : 'del catálogo');
-      if (it && estado.talle !== 'Todos') texto += ' en talle ' + estado.talle;
-      texto += '. ¿Sigue disponible?';
-      return 'https://wa.me/' + D.whatsapp + '?text=' + encodeURIComponent(texto);
-    }
+    if (D.whatsapp) return 'https://wa.me/' + D.whatsapp + '?text=' + encodeURIComponent(textoPedido(it));
     return 'https://ig.me/m/' + encodeURIComponent(D.instagram);
+  }
+  let avisoTimer = null;
+  function mostrarAviso(texto) {
+    const a = document.getElementById('aviso');
+    a.textContent = texto;
+    a.classList.add('ver');
+    clearTimeout(avisoTimer);
+    avisoTimer = setTimeout(function () { a.classList.remove('ver'); }, 4000);
+  }
+  function copiar(texto) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(texto).then(function () { return true; }, function () { return copiarViejo(texto); });
+    } catch (e) { /* sigue abajo */ }
+    return Promise.resolve(copiarViejo(texto));
+  }
+  function copiarViejo(texto) {
+    const t = document.createElement('textarea');
+    t.value = texto; t.setAttribute('readonly', ''); t.style.cssText = 'position:fixed;top:-100px;opacity:0';
+    document.body.appendChild(t); t.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    t.remove();
+    return ok;
+  }
+  function pedirPorInstagram(texto) {
+    copiar(texto).then(function (ok) {
+      mostrarAviso(ok ? 'Te copiamos el mensaje. Tocá "Mensaje" en nuestro perfil y pegalo.' : 'Abrimos nuestro perfil: tocá "Mensaje" y escribinos qué camiseta querés.');
+    });
+    setTimeout(function () {
+      location.href = 'instagram://user?username=' + encodeURIComponent(D.instagram);
+      setTimeout(function () {
+        if (document.visibilityState === 'visible') location.href = 'https://www.instagram.com/' + encodeURIComponent(D.instagram) + '/';
+      }, 1500);
+    }, 900);
   }
   function pasaTalle(it, t) { return t === 'Todos' || it.t.indexOf(t) >= 0; }
   function pasaTipo(it, x) { return x === 'Todo' || it.tipo === x; }
@@ -267,7 +308,7 @@
     const talles = it.t.map(function (t) { return '<span class="talle' + (estado.talle === t ? ' on' : '') + '">' + esc(t) + '</span>'; }).join('');
     return '<article class="tarjeta">' + copia +
       '<div class="datos"><div class="talles" aria-label="' + esc('Talles disponibles: ' + it.t.join(', ')) + '">' + talles + '</div><span class="valor">' + esc(it.p) + '</span></div>' +
-      '<a class="pedir" href="' + linkPedido(it) + '" target="_blank" rel="noopener" aria-label="' + esc('Pedir ' + nombre(it)) + '">Pedila' + FLECHA + '</a>' +
+      '<a class="pedir" href="' + linkPedido(it) + '" data-texto="' + esc(textoPedido(it)) + '" target="_blank" rel="noopener" aria-label="' + esc('Pedir ' + nombre(it)) + '">Pedila' + FLECHA + '</a>' +
       '</article>';
   }
 
@@ -293,7 +334,7 @@
 
     document.getElementById('lista').innerHTML = total ? html :
       '<div class="vacio"><p>Justo esa no la tenemos ahora.</p><p>Escribinos y te avisamos cuando entre en tu talle.</p>' +
-      '<a class="boton linea" href="' + linkPedido(null) + '" target="_blank" rel="noopener">Escribinos' + FLECHA + '</a></div>';
+      '<a class="boton linea" data-dm href="' + linkPedido(null) + '" target="_blank" rel="noopener">Escribinos' + FLECHA + '</a></div>';
 
     let resumen = total + (total === 1 ? ' camiseta' : ' camisetas');
     if (estado.talle !== 'Todos') resumen += ' en talle ' + estado.talle;
@@ -330,7 +371,7 @@
     document.getElementById('bajada').textContent = 'Camisetas de selecciones y clubes, todas con foto real. Elegí modelo y talle, y pedila por ' + (D.whatsapp ? 'WhatsApp.' : 'DM.');
     document.getElementById('contacto').innerHTML =
       (D.whatsapp ? '<a class="boton" href="' + linkPedido(null) + '" target="_blank" rel="noopener">Escribinos por WhatsApp' + FLECHA + '</a>' : '') +
-      '<a class="boton' + (D.whatsapp ? ' linea' : '') + '" href="https://ig.me/m/' + encodeURIComponent(D.instagram) + '" target="_blank" rel="noopener">Escribinos por Instagram' + FLECHA + '</a>';
+      '<a class="boton' + (D.whatsapp ? ' linea' : '') + '" data-dm href="https://ig.me/m/' + encodeURIComponent(D.instagram) + '" target="_blank" rel="noopener">Escribinos por Instagram' + FLECHA + '</a>';
     render();
   }
 
@@ -342,6 +383,12 @@
 
   document.addEventListener('click', function (ev) {
     if (!D) return;
+    const pedido = ev.target.closest('a.pedir, a[data-dm]');
+    if (pedido && !D.whatsapp && EN_INSTAGRAM) {
+      ev.preventDefault();
+      pedirPorInstagram(pedido.getAttribute('data-texto') || textoPedido(null));
+      return;
+    }
     const filtro = ev.target.closest('[data-filtro]');
     if (filtro) {
       estado[filtro.getAttribute('data-filtro')] = filtro.getAttribute('data-valor');
