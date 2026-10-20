@@ -309,9 +309,13 @@
         return D.portada.indexOf('http') === 0 ? D.portada + '?w=' + w + '&q=70&auto=format&fit=crop' : foto(D.portada, w);
       };
       p.onload = function () { p.classList.add('ok'); };
-      p.srcset = url(800) + ' 800w, ' + url(1400) + ' 1400w, ' + url(2000) + ' 2000w';
-      p.sizes = '100vw';
-      p.src = url(1400);
+      if (D.portadaUrl) {
+        p.src = D.portadaUrl;
+      } else {
+        p.srcset = url(800) + ' 800w, ' + url(1400) + ' 1400w, ' + url(2000) + ' 2000w';
+        p.sizes = '100vw';
+        p.src = url(1400);
+      }
       p.hidden = false;
     }
     document.getElementById('fecha').textContent = D.fecha;
@@ -369,7 +373,7 @@
     }, { passive: true });
   });
 
-  fetch('https://script.google.com/macros/s/AKfycby313z4jHOiciyJiHvqqvmUrEH324c5P23eCdp1X3SMnOq1C70cUkVj-j9sFVkAl5Dl8Q/exec?api=1').then(function (r) { return r.json(); }).then(iniciar).catch(sinConexion);
+  fetch('https://script.google.com/macros/s/AKfycby313z4jHOiciyJiHvqqvmUrEH324c5P23eCdp1X3SMnOq1C70cUkVj-j9sFVkAl5Dl8Q/exec?api=1').then(function (r) { return r.json(); }).then(function (d) { d.portadaUrl = 'portada.jpg'; iniciar(d); }).catch(sinConexion);
 </script>
 </body>
 </html>
